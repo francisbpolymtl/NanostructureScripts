@@ -1,0 +1,131 @@
+#!/bin/bash
+
+show_help() {
+    echo "Usage: $0 [-s] [-n] [-l <label>] [-h]"
+    echo "  -s                 Process spin-polarized data"
+    echo "  -n                 Process with non-orthogonal grid"
+    echo "  -l <label>         Set the label"
+    echo "  -h                 Display this help message"
+    exit 0
+}
+
+spin_polarized=false
+non_orthogonal=false
+label=""
+
+while getopts "sln:h" opt; do
+    case $opt in
+        s)
+            spin_polarized=true
+            ;;
+        l)
+            label="$OPTARG"
+            ;;
+        n)
+            non_orthogonal=true
+            ;;
+        h)
+            show_help
+            ;;
+        \?)
+            echo "Invalid option: -$OPTARG" >&2
+            exit 1
+            ;;
+    esac
+done
+
+shift $((OPTIND - 1))
+
+if $non_orthogonal; then
+	if $spin_polarized; then
+		g2c_ng -n 2 -s ${label}.STRUCT_OUT -g ${label}.RHO
+    	g2c_ng -n 2 -s ${label}.STRUCT_OUT -g ${label}.BADER
+        mv Grid.cube BADER.cube
+    	bader Down.cube -ref BADER.cube
+        mv ACF.dat ${label}-DN-ACF.dat
+        mv AVF.dat ${label}-DN-AVF.dat
+        mv BCF.dat ${label}-DN-BCF.dat
+
+		bader Up.cube -ref BADER.cube
+        mv ACF.dat ${label}-UP-ACF.dat
+        mv AVF.dat ${label}-UP-AVF.dat
+        mv BCF.dat ${label}-UP-BCF.dat
+
+        rm BADER.cube
+        rm Down.cube
+        rm Up.cube
+
+    	python3 /home/francis/siesta/4.1.5/scripts/bader2pdb.py -s $label
+        #python3 /home/francis/siesta/4.1.5/scripts/plot_Badercharge.py $label
+
+	else
+    	g2c_ng -n 2 -s ${label}.STRUCT_OUT -g ${label}.RHO
+    	mv Grid.cube RHO.cube
+    	g2c_ng -n 2 -s ${label}.STRUCT_OUT -g ${label}.BADER
+    	mv Grid.cube BADER.cube
+    	bader RHO.cube -ref BADER.cube
+        mv ACF.dat ${label}-ACF.dat
+        mv AVF.dat ${label}-AVF.dat
+        mv BCF.dat ${label}-BCF.dat
+
+        rm RHO.cube
+        rm BADER.cube
+
+		python3 /home/francis/siesta/4.1.5/scripts/bader2pdb.py $label
+        #python3 /home/francis/siesta/4.1.5/scripts/plot_Badercharge.py $label
+
+	fi
+else
+    cat > input.rho << EOF
+    ${label}
+    rho
+    0.0 0.0 0.0
+    2
+    unformatted
+EOF
+    cat > input.bader << EOF
+    ${label}
+    bader
+    0.0 0.0 0.0
+    2
+    unformatted
+EOF
+    grid2cube < input.rho
+    grid2cube < input.bader
+
+    if $spin_polarized; then
+        bader ${label}.RHO.DN.cube -ref ${label}.BADER.cube
+        mv ACF.dat ${label}-DN-ACF.dat
+        mv AVF.dat ${label}-DN-AVF.dat
+        mv BCF.dat ${label}-DN-BCF.dat
+
+        bader ${label}.RHO.UP.cube -ref ${label}.BADER.cube
+        mv ACF.dat ${label}-UP-ACF.dat
+        mv AVF.dat ${label}-UP-AVF.dat
+        mv BCF.dat ${label}-UP-BCF.dat
+
+        python3 /home/francis/siesta/4.1.5/scripts/bader2pdb.py -s $label
+        #python3 /home/francis/siesta/4.1.5/scripts/plot_Badercharge.py $label
+
+
+        rm ${label}.RHO.DN.cube
+        rm ${label}.RHO.UP.cube
+        rm ${label}.BADER.cube
+        # rm ${label}.BADER
+        # rm ${label}.RHO
+    else
+        bader ${label}.RHO.cube -ref ${label}.BADER.cube
+        mv ACF.dat ${label}-ACF.dat
+        mv AVF.dat ${label}-AVF.dat
+        mv BCF.dat ${label}-BCF.dat
+
+        python3 /home/francis/siesta/4.1.5/scripts/bader2pdb.py $label
+        #python3 /home/francis/siesta/4.1.5/scripts/plot_Badercharge.py $label
+
+        rm ${label}.RHO.cube
+        rm ${label}.BADER.cube
+        # rm ${label}.BADER
+        # rm ${label}.RHO
+    fi
+
+fi

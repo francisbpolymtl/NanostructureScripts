@@ -1,0 +1,65 @@
+#!/bin/bash
+
+# Default values
+MIN_HEIGHT_ANG=2
+MAX_HEIGHT_ANG=7
+NUM_STEPS=10
+LABEL=""
+LDOS_FILE=""
+
+# Display help message
+display_help() {
+    echo "Usage: $0 [-m MIN_HEIGHT] [-M MAX_HEIGHT] [-n NUM_STEPS] [-l LABEL] [-h]"
+    echo "Options:"
+    echo "  -m MIN_HEIGHT   Minimal height in Angstrom (default: 1.89)"
+    echo "  -M MAX_HEIGHT   Maximal height in Angstrom (default: 13.22)"
+    echo "  -n NUM_STEPS    Number of steps between minimal and maximal heights (default: 19)"
+    echo "  -l LABEL        Label for output files (default: auto-generated)"
+    echo "  -h              Display this help message"
+    exit 0
+}
+
+# Parse command line options
+while getopts ":m:M:n:l:h" opt; do
+    case $opt in
+        m)
+            MIN_HEIGHT_ANG=$OPTARG
+            ;;
+        M)
+            MAX_HEIGHT_ANG=$OPTARG
+            ;;
+        n)
+            NUM_STEPS=$OPTARG
+            ;;
+        l)
+            LABEL=$OPTARG
+            ;;
+        h)
+            display_help
+            ;;
+        \?)
+            echo "Invalid option: -$OPTARG" >&2
+            exit 1
+            ;;
+        :)
+            echo "Option -$OPTARG requires an argument." >&2
+            exit 1
+            ;;
+    esac
+done
+
+# Convert heights from Angstrom to Bohr
+MIN_HEIGHT_BOHR=$(bc <<< "scale=6; $MIN_HEIGHT_ANG / 0.5291772083")
+MAX_HEIGHT_BOHR=$(bc <<< "scale=6; $MAX_HEIGHT_ANG / 0.5291772083")
+
+# Calculate step size
+STEP_SIZE_BOHR=$(bc <<< "scale=6; ($MAX_HEIGHT_BOHR - $MIN_HEIGHT_BOHR) / $NUM_STEPS")
+
+# Run graphstm commands with dynamic heights
+for ((i = 0; i <= NUM_STEPS; i++)); do
+    HEIGHT_BOHR=$(bc <<< "scale=6; $MIN_HEIGHT_BOHR + ($STEP_SIZE_BOHR * $i)")
+    HEIGHT_ANG=$(printf "%.1f" "$(echo "$HEIGHT_BOHR * 0.5291772083" | bc)") #Change number of decimal point in LABEL ONLY by changing 1 in %.1f
+    OUTPUT_FILE="$LABEL-SZ-$HEIGHT_ANG.dat" #Name of output .dat output file AND .png image generated
+    plstm -z $HEIGHT_BOHR -s z -o "$OUTPUT_FILE" "$LABEL.LDOS" #Change parameters from plstm script to your convenience
+    python3 /home/francis/francisScript/python/plot_STM-lib.py $OUTPUT_FILE #Replace with your path 
+done
