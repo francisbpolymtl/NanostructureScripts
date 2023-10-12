@@ -1,0 +1,75 @@
+#!/bin/bash
+
+#Creates a denchar .fdf input file from .XV and .fdf file found in the directory
+#Enter below the path of the python scripts "read_SpeciesLabel.py" and "read_unit_cell_denchar.py"
+PATH_script="/home/vigir2/Stage E23/Utils"
+
+n=0
+while getopts 'n:h' opt; do
+  case "$opt" in
+    n)
+      n="$OPTARG"
+      ;;
+    ?|h)
+		echo Creates a denchar input fdf file from SystemLabel.XV and SystemLabel.fdf.
+		echo
+		echo Usage: write_denchar [-OPTIONS] [SystemLabel]
+		echo
+		echo OPTIONS: -n [multipicity factor for number of grid points]
+		echo EXAMPLE: If vector a is 10 Ang and -n 2, there will be 20 grids points along that vector. By default, n=5
+		exit
+  esac
+done
+
+if [ -z $1 ]
+then
+	echo You must put the system label in argument. Ex: write_denchar [SystemLabel]
+	exit
+fi
+if ! [ -e ${@: -1}.XV ]
+then 
+	echo ${1}.XV was not found in the directory. Try again.
+	exit
+fi
+if ! [ -e ${@: -1}.fdf ]
+then 
+	echo ${@: -1}.fdf was not found in the directory. Try again.
+	exit
+fi
+
+sys_label="${@: -1}"
+
+# Writes the fdf input file for denchar, following the structure presented in the denchar documentation.
+
+echo SystemLabel $sys_label > denchar_input.fdf
+echo >> denchar_input.fdf
+
+echo Denchar.TypeOfRun 3D >> denchar_input.fdf
+echo >> denchar_input.fdf
+python "$PATH_script"/read_SpeciesLabel.py $sys_label >> denchar_input.fdf
+echo >> denchar_input.fdf
+
+echo Denchar.TypeOfRun 3D >> denchar_input.fdf
+echo Denchar.PlotCharge .TRUE. >> denchar_input.fdf
+echo Denchar.PlotWaveFunctions .TRUE. >> denchar_input.fdf
+echo Denchar.CoorUnits Ang >> denchar_input.fdf
+echo Denchar.DensityUnits Ele/Ang**3 >> denchar_input.fdf
+echo >> denchar_input.fdf
+
+echo Denchar.MinX 0 Ang >> denchar_input.fdf
+echo Denchar.MinY 0 Ang >> denchar_input.fdf
+echo Denchar.MinZ 0 Ang >> denchar_input.fdf
+python "$PATH_script"/read_unit_cell_denchar.py $sys_label $n >> denchar_input.fdf
+echo >> denchar_input.fdf
+echo Denchar.PlaneGeneration TwoLines >> denchar_input.fdf
+echo %block Denchar.Comp2Vectors >> denchar_input.fdf
+echo 1.000 0.000 0.000 >> denchar_input.fdf
+echo 0.000 1.000 0.000 >> denchar_input.fdf
+echo %endblock Denchar.Comp2Vectors >> denchar_input.fdf
+echo >> denchar_input.fdf
+
+echo %block Denchar.PlaneOrigin >> denchar_input.fdf
+echo 0.0 0.0 0.0 >> denchar_input.fdf
+echo %endblock Denchar.PlaneOrigin >> denchar_input.fdf
+
+echo denchar_input.fdf was written succesfully!

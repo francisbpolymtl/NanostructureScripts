@@ -1,0 +1,379 @@
+#!/bin/bash
+
+#WHAT DOES THIS TOOL DO:
+#It calculates the Mulliken Population for each atom specie from the .out file generated in calculations using SIESTA
+
+#USAGE:
+#./calc_pop filename.out
+#./calc_pop filename.out -u 80
+#./calc_pop filename.out -s 1:2 -v 300.1
+
+#OPTIONS:
+#-u or --until: Calculate the Mulliken Population until the specified atom number in the system.
+#-b or --begin: Calculate the Mulliken Population starting from a specified atom number in the system.
+#-s or --sum: Sum the population of two or more atom species. Syntax: Separate the atom species number with ':'. Ex.: ./calc_pop filename.out -s 1:2 \n
+#-v or --value: Substract the result of the option -s or --sum from a specified value.
+#-h or --help: Show the help.
+#-V or --Version: Show the version"
+
+#EXAMPLES:
+#(Calculate until atom 80, sum the 1st, 3rd and 4th atom species population, and substract 320.20 from the sum)
+#./calc_pop filename.out -u 80 -s 1:3:4 -v 320.20
+#(Calculate from atom 20 to atom 80, sum the 1st and 2nd atom species population, and substract 305.42 from the sum)
+#./calc_pop filename.out -b 20 -u 80 -s 1:3:4 -v 305.42
+
+#By: Caio Vinícius C. R. da Silva - caioviniciuscaetano@hotmail.com
+
+helpFunction()
+{
+   echo -e "\WHAT DOES THIS TOOL DO:\nIt calculates the Mulliken Population for each atom specie from the .out file generated in calculations using SIESTA."
+   echo -e "\nUSAGE:\n./calc_pop filename.out \n./calc_pop filename.out -u 80\n./calc_pop filename.out -s 1:2 -v 300.1"
+   echo -e "\nOPTIONS:\n-u or --until: Calculate the Mulliken Population until the specified atom number in the system.\n-s or --sum: Sum the population of two or more atom species. Syntax: Separate the atom species number with ':'. Ex.: ./calc_pop filename.out -s 1:2 \n-v or --value: Substract the result of the option -s or --sum from a specified value.\n-h or --help: Show the help.\n-V or --Version: Show the version"
+   echo -e "\nEXAMPLE:\n(Calculate until atom 80, sum the 1st, 3rd atom species population, and substract 320.20 from the sum)\n./calc_pop filename.out -u 80 -s 1:3:4 -v 320.20"
+   exit 1 # Exit script after printing help
+}
+
+unt=0
+beg=0
+value=0
+value_var=0
+verify_sum1=`echo "$@" | awk -F" -s " '{print NF-1}'` 
+verify_sum2=`echo "$@" | awk -F" --sum " '{print NF-1}'`
+
+for arg in "$@"
+do
+	ext=`echo $arg | cut -f2 -d"."`
+	if [[ ${ext} == "out" ]]; then
+		arquivo_out+=($arg)
+		shift
+	fi
+    case $arg in
+   -u | --until )
+	unt=$2
+	len=${#unt}
+	testvar=$(echo "$unt" | tr -c '0-9' '\n')     # remove non-numeric chars from $unt
+	if [[ $len -ne ${#testvar} ]] ; then 
+		echo -e "ERROR: $unt is not a number"  # error message
+		exit
+	fi
+	shift
+	shift
+      ;;
+   -b | --begin )
+	beg=$2
+	len=${#beg}
+	testvar=$(echo "$beg" | tr -c '0-9' '\n')     # remove non-numeric chars from $beg
+	if [[ $len -ne ${#testvar} ]] ; then 
+		echo -e "ERROR: $beg is not a number"  # error message
+		exit
+	fi
+	shift
+	shift
+      ;;	  
+    -V | --Version )
+      echo 1.4
+	  exit
+    ;;
+	-s | --sum )
+    sum=$2
+	cuts=`echo "$sum" | awk -F":" '{print NF-1}'`
+	if [[ $cuts -lt 1 ]]; then
+		echo -e "The parameters for sum the atom specie's population must be greater than 2.\nEx.: Sum the populations of the first and third atom species\n./calc_pop filename.out -s 1:3"
+		exit
+	fi
+	for ((i=1;i<=$cuts;++i)); do
+		summation+=(`echo $sum | cut -f$i -d":"`)
+		if [[ $i -eq $cuts ]]; then
+			summation+=(`echo $sum | cut -f$(($i+1)) -d":"`)
+            len=${#summation[$i]}
+			testvar=$(echo "${summation[$i]}" |  tr -c '0-9.' '\n')   # remove non-numeric chars from ${summation[$(($i-1))]}
+			if [[ $len -ne ${#testvar} ]] ; then 
+				echo -e "ERROR: ${summation[$i]} is not a number"  # error message
+				exit
+			fi			
+		fi
+		len=${#summation[$(($i-1))]}
+		testvar=$(echo "${summation[$(($i-1))]}" |  tr -c '0-9.' '\n')   # remove non-numeric chars from ${summation[$(($i-1))]}
+		if [[ $len -ne ${#testvar} ]] ; then 
+			echo -e "ERROR: ${summation[$(($i-1))]} is not a number"  # error message
+			exit
+		fi
+	done	
+	shift 
+	shift
+    ;;
+	-h | --help )
+	helpFunction ;;
+	
+    -v | --value )
+	 if [[ $verify_sum1 -ne 0 || $verify_sum2 -ne 0 ]]; then
+		value=$2
+		len=${#value}
+		testvar=$(echo "$value" |  tr -c '0-9.' '\n')   # remove non-numeric chars from $value
+		if [[ $len -ne ${#testvar} ]] ; then 
+			echo -e "ERROR: $value is not a number"  # error message
+			exit
+		else
+			value_var=1
+		fi
+	 else
+		echo -e "The parameter -s must be included to use the option -v\nEx.: /calc_pop filename.out -s 1:3 -v 320.02"
+		exit
+	 fi
+     shift
+	 shift
+      ;;
+	  
+  esac
+done
+
+out=(`find *.out`)
+if [ ${#arquivo_out[*]}  -gt 1 ];then
+   echo -e "ERROR: More than one .out file found. \nPlease enter the full filename or remove one of the .out files in this folder"
+   exit
+elif [ ${#arquivo_out[*]}  -eq 0 ];then
+   echo -e "ERROR: No .out files found"
+   echo -e "\nHow to use: ./calc_pop file1.out"
+   exit  
+else
+  out=(`find $arquivo_out`)
+  ext=`echo $out | cut -f2 -d"."`
+  if [ ${#out[*]} -eq 0 ];then
+     echo -e "ERROR: " $arquivo_out " not found"
+	 exit
+  fi
+  if [[ $ext != "out" ]]; then
+	echo "Extension not supported. Use only .out files"
+	echo -e "\nHow to use: ./calc_pop file1.out"
+	exit	
+  fi
+fi
+
+converged=`grep -n "End of run" $arquivo_out | tail -1`
+if [[ ${#converged} -eq 0 ]]; then
+	echo -e "Error: The calculation is not finished"
+	exit
+else
+	echo "Summing values of Mulliken Population from ${arquivo_out}"	
+fi
+
+constrained=`grep constrained $arquivo_out | awk '{print $2}' | cut -f1 -d":"  | tail -1` 
+linha1=`grep -n constrained $arquivo_out | awk '{print $1}' | cut -f1 -d":" | tail -1` 
+final1=`grep -n End $arquivo_out | cut -f1 -d":" | tail -1` 
+linharesult1=$(( $final1 - $linha1 + 15 ))
+tail -$linharesult1 $arquivo_out > arquivo1
+
+spin=`grep 'Number of spin components' $arquivo_out | awk '{print $7}'`
+if [[ $spin -eq 1 ]]; then
+	linha2=`grep -n Populations arquivo1 | cut -f1 -d":" | tail -1` 
+	final2=`grep -n Qtot arquivo1 | cut -f1 -d":" | tail -1` 
+	linharesult2=$(( $final2 - $linha2 +1))
+	tail -n +$linha2 arquivo1 | head -n $linharesult2 > arquivodown
+else
+	linha2=`grep -n UP arquivo1 | cut -f1 -d":" | tail -1` 
+	final2=`grep -n DOWN arquivo1 | cut -f1 -d":" | tail -1` 
+	linharesult2=$(( $final2 - $linha2 ))
+	tail -n +$linha2 arquivo1 | head -n $linharesult2 > arquivoup
+
+	linha3=`grep -n DOWN arquivo1 | cut -f1 -d":" | tail -1` 
+	final3=`grep -n Qtot arquivo1 | cut -f1 -d":" | tail -1` 
+	linharesult3=$(( $final3 - $linha3 +1))
+	tail -n +$linha3 arquivo1 | head -n $linharesult3 > arquivodown
+fi
+
+chemicalspecies1=`grep -n ChemicalSpeciesLabel $arquivo_out | cut -f1 -d":" | head -n 1 | tail -1`
+chemicalspecies2=`grep -n ChemicalSpeciesLabel $arquivo_out | cut -f1 -d":" | head -n 2 | tail -1`
+quant=$(( $chemicalspecies2 - $chemicalspecies1 - 1 ))
+atomolinha=$(( $chemicalspecies1 + 1 ))
+for ((i=0; i<$quant; i=$(($i+1)))) 
+     do
+	 	  
+		 atomo[$i]=`head -n +$atomolinha $arquivo_out | tail -1 | awk '{print $3}'`
+		 atomolinha=$(( $atomolinha + 1 ))
+		 if [ ${#atomo[*]} -ge 1 ]; then
+		 #SPIN UP 
+		 if [[ $spin -ne 1 ]]; then
+			linha9=`grep -n ${atomo[$(( $i - 1 ))]} arquivoup | cut -f1 -d":" | tail -1` 
+			specie2=`grep -n ${atomo[$i]} arquivoup | cut -f1 -d":" | tail -1` 
+			linharesult7=$(($specie2 - 2))
+			linha10=$(( $linha9 + 4))
+			for ((j=$linha10; j<=$linharesult7; j=$(($j+2)))) 
+			  do 
+				if [[ $unt != 0 ]]; then
+					verify_unt=`tail -n +$j arquivoup | head -n 1 | awk '{print $1}'`
+					if [[ $verify_unt -gt $unt ]]; then
+						break
+					fi
+				fi
+				if [[ $beg != 0 ]]; then
+					verify_beg=`tail -n +$j arquivoup | head -n 1 | awk '{print $1}'`					
+					if [[ $verify_beg -lt $beg ]]; then
+						continue
+					fi
+				fi
+				array4=`tail -n +$j arquivoup | head -n 1 | awk '{print $2}'`
+				if [[ $array4 != ?([-+])+([0-9])?(.*([0-9])) ]] 
+				then
+				   j=$(($j+1))
+				   linharesult7=$(( $linharesult7 - 2))
+				   array4=`tail -n +$j arquivoup | head -n 1 | awk '{print $2}'`
+				fi
+				soma1[$i]=`echo $array4 ${soma1[$i]} | awk '{printf "%f", $1 + $2}'`
+				echo ${atomo[$(( $i - 1 ))]} "UP:" ${soma1[$i]}
+			  done
+		 fi
+
+	#SPIN DOWN
+    	linha6=`grep -n ${atomo[$(( $i - 1 ))]} arquivodown | cut -f1 -d":" | tail -1` 
+        specie1=`grep -n ${atomo[$i]} arquivodown | cut -f1 -d":" | tail -1` 
+        linharesult5=$(($specie1 - 2))
+        linha6=$(( $linha6 + 4))
+        for ((k=$linha6; k<=$linharesult5; k=$(($k+2)))) 
+          do 
+			if [[ $unt != 0 ]]; then
+				verify_unt=`tail -n +$k arquivodown | head -n 1 | awk '{print $1}'`
+				if [[ $verify_unt -gt $unt ]]; then
+					break
+				fi
+			fi
+			if [[ $beg != 0 ]]; then
+				verify_beg=`tail -n +$k arquivodown | head -n 1 | awk '{print $1}'`				
+				if [[ $verify_beg -lt $beg ]]; then
+					continue
+				fi
+			fi
+            array2=`tail -n +$k arquivodown | head -n 1 | awk '{print $2}'`
+			if [[ $array2 != ?([-+])+([0-9])?(.*([0-9])) ]] 
+		    then
+		       k=$(($k+1))
+		       linharesult5=$(( $linharesult5 - 2))
+		       array2=`tail -n +$k arquivodown | head -n 1 | awk '{print $2}'`
+		    fi
+	        soma2[$i]=`echo $array2 ${soma2[$i]} | awk '{printf "%f", $1 + $2}'`
+			if [[ $spin -eq 1 ]]; then
+				echo ${atomo[$(( $i - 1 ))]}":" ${soma2[$i]}
+			else	
+				echo ${atomo[$(( $i - 1 ))]} DOWN: ${soma2[$i]}
+			fi
+          done
+		
+		pop1=`echo ${soma1[$i]} $pop1 | awk '{printf "%f", $1 + $2}'`
+		pop2=`echo ${soma2[$i]} $pop2 | awk '{printf "%f", $1 + $2}'`
+		
+		
+		if [ ${#atomo[*]} -eq $quant ]
+	    then
+           #SPIN UP
+		   if [[ $spin -ne 1 ]]; then
+			   linha7=`grep -n ${atomo[$i]} arquivoup | cut -f1 -d":" | tail -1` 
+			   linhaqtotdown=`grep -n Qtot arquivoup | cut -f1 -d":" | tail -1` 
+			   linharesult6=$(($linhaqtotdown -2))
+			   linha8=$(( $linha7 + 4))
+			   for ((j=$linha8; j<=$linharesult6; j=$(($j+2)))) 
+				 do
+				   if [[ $unt != 0 ]]; then
+					  verify_unt=`tail -n +$j arquivoup | head -n 1 | awk '{print $1}'`
+					  if [[ $verify_unt -gt $unt ]]; then
+						break
+					  fi
+				   fi	
+				   if [[ $beg != 0 ]]; then
+					  verify_beg=`tail -n +$j arquivoup | head -n 1 | awk '{print $1}'`
+					  if [[ $verify_beg -lt $beg ]]; then
+						continue
+					  fi
+				   fi
+				   array3=`tail -n +$j arquivoup | head -n 1 | awk '{print $2}'`
+				   if [[ $array3 != ?([-+])+([0-9])?(.*([0-9])) ]] 
+				   then
+					 j=$(($j+1))
+					 linharesult6=$(( $linharesult6 - 2))
+					 array3=`tail -n +$j arquivoup | head -n 1 | awk '{print $2}'`
+				   fi
+				   soma1[$(($i+1))]=`echo $array3 ${soma1[$(($i+1))]} | awk '{printf "%f", $1 + $2}'`
+				   echo ${atomo[$i]} UP: ${soma1[$(($i+1))]}
+				 done
+		   fi
+           #SPIN DOWN
+		   linha4=`grep -n ${atomo[$i]} arquivodown | cut -f1 -d":" | tail -1` 
+           linhaqtotdown=`grep -n Qtot arquivodown | cut -f1 -d":" | tail -1` 
+           linharesult4=$(($linhaqtotdown -2))
+           linha5=$(( $linha4 + 4))
+           for ((k=$linha5; k<=$linharesult4; k=$(($k+2)))) 
+             do
+				if [[ $unt != 0 ]]; then
+					verify_unt=`tail -n +$k arquivodown | head -n 1 | awk '{print $1}'`
+					if [[ $verify_unt -gt $unt ]]; then
+						break
+					fi
+				fi
+				if [[ $beg != 0 ]]; then
+					verify_beg=`tail -n +$k arquivodown | head -n 1 | awk '{print $1}'`					
+					if [[ $verify_beg -lt $beg ]]; then
+						continue
+					fi
+				fi
+               array1=`tail -n +$k arquivodown | head -n 1 | awk '{print $2}'`
+			   if [[ $array1 != ?([-+])+([0-9])?(.*([0-9])) ]] 
+		       then
+		          k=$(($k+1))
+		          linharesult4=$(( $linharesult4 - 2))
+		          array1=`tail -n +$k arquivodown | head -n 1 | awk '{print $2}'`
+		       fi
+	           soma2[$(($i+1))]=`echo $array1 ${soma2[$(($i+1))]} | awk '{printf "%f", $1 + $2}'`
+			   if [[ $spin -eq 1 ]]; then
+					echo ${atomo[$i]}":" ${soma2[$(($i+1))]}
+			   else	
+					echo ${atomo[$i]} DOWN: ${soma2[$(($i+1))]}
+			   fi
+             done		
+			 
+			 pop1=`echo ${soma1[$i+1]} $pop1 | awk '{printf "%f", $1 + $2}'`
+		     pop2=`echo ${soma2[$i+1]} $pop2 | awk '{printf "%f", $1 + $2}'`  
+		fi
+	 fi	
+	 done	
+
+if [[ $spin -ne 1 ]]; then
+	magnetic=`echo $pop1 $pop2 | awk '{ if (($1 - $2) >= 0){printf "%f", $1 - $2}else{printf "%f", $2 - $1}}'`
+fi
+#rm -rf arquivo*
+echo -e "\n___________________________________"
+for ((i=0; i<${#atomo[*]}; i++)); do
+	if [[ $spin -eq 1 ]]; then	
+		echo ${atomo[$i]}": Total =" ${soma2[$(($i+1))]}
+	else
+		total=`echo ${soma1[$(($i+1))]} ${soma2[$(($i+1))]} | awk '{printf "%f", $1 + $2}'`
+		echo ${atomo[$i]}": Total =" $total
+	fi  
+done
+
+if [[ $unt -eq 0 ]] && [[ $spin -ne 1 ]] && [[ $beg -eq 0 ]]; then
+	echo -e "\nMagnetic Moment = " $magnetic "µB"
+fi
+
+syst1=0
+atom_sum=""
+if [[ ${#summation[*]} -ge 2 ]]; then
+	for ((i=0;i<${#summation[*]};++i)); do
+		if [[ $spin -eq 1 ]]; then	
+			syst1=`echo $syst1 ${soma2[${summation[$i]}]} | awk '{printf "%f", $1 + $2 }'`
+		else
+			syst1=`echo $syst1 ${soma1[${summation[$i]}]} ${soma2[${summation[$i]}]} | awk '{printf "%f", $1 + $2 + $3}'`
+		fi
+		j=$(($i+1))
+		if [[ $j -eq ${#summation[*]} ]]; then
+			atom_sum+=`echo ${atomo[$((${summation[$i]}-1))]}`
+		else
+			atom_sum+=`echo ${atomo[$((${summation[$i]}-1))]}" + "`
+		fi		
+	done
+	echo -e "\nSum of ${atom_sum} = "$syst1
+fi
+  	
+if [[ $value_var -ne 0 ]]; then
+	result=`echo $syst1 $value | awk '{printf "%f", $1 - $2}'` 
+	echo -e "\nResult subtracting $value: " $result
+fi
+   
+echo -e "___________________________________"

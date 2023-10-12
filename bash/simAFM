@@ -1,0 +1,207 @@
+#!/bin/bash
+
+# This script allows the automatisation of the process required in order to get simulated AFM images. It uses the python codes provided by the Probe particle model
+# See documentation at this link: https://github.com/Probe-Particle/ppafm/wiki#quick-start. 
+# Please write the path to the default file params.ini and to the python file read_unit_cell.py right below
+PATH_params="/home/vigir2/Stage E23/Utils"
+
+__help="
+Usage: simAFM [OPTIONS]
+
+Options:
+    --pos       Plot the relaxed position of the probe particle during relaxation
+    --fz        Plot the total vertical force
+    --npy       Saves all intermediate data into machine readable .npy files (recommended, speeds up the calculations)
+    --cbar      Add a colorbar to the output images
+    --atoms     Adds atoms positions in the output images (you need the .xyz file in the directory)
+    --bonds     Adds lines in between close-by atoms (Doesn't work well :( )
+    --xsf       Enable the script to automaticly convert the .VH to .xsf file readable by ppafm (you need the .XV file in the directory)
+    --help      Display help menu
+"
+flag_array=("--pos --npy --cbar --atoms --bonds --xsf --fz --help -help -h")
+
+# Fonction to see if an item is contained in a list
+contains() {
+    local string="$1"
+    shift
+    local list=("$@")
+    for item in "${list[@]}"; do
+        if [[ "$string" == "$item" ]]; then
+            return 0 
+        fi
+    done
+    return 1
+}
+
+for i in $@; do
+    if ! contains "$i" $flag_array; then
+        echo The flags are wrong. The script should be called folowing this structure:
+        echo "$__help"
+        echo
+        echo Try again
+        exit
+    fi
+done
+
+if contains '--help' $@ || contains '-help' $@ || contains '-h' $@; then
+    echo "$__help"
+    exit
+fi
+
+if [ -s params.ini ]; then
+   current_param=''
+   echo Do you want to use parameters from params.ini in the current folder for the simulation? [y,n]
+   while [[ $current_param != 'y' ]] && [[ $current_param != 'n' ]]; do
+        read current_param
+        if [[ $current_param == 'y' ]]; then
+            continue
+        elif [[ $current_param == 'n' ]]; then   
+            echo Edit params.ini with the desired parameters and launch the program again.
+            exit
+        else
+            echo Answer must be 'y' or 'n'. Try again.
+        fi
+    done
+else
+    cp "$PATH_params"/params.ini .
+    echo params.ini has been copied to the current directory.
+    echo Please edit params.ini with the desired parameters and launch the program again.
+    exit
+fi
+
+echo Enter System Label to generate AFM image: 
+read sys_label
+
+if ! contains "--xsf" $@; then
+    if [ ! -s ${sys_label}.xsf ] && [ ! -s ${sys_label}.XSF ]; then
+        if [ -s ${sys_label}.VH ]; then
+            echo ${sys_label}.xsf was not found in the directory. Do you want to create the file using ${sys_label}.VH ?
+            create_xsf=""
+            while [[ $create_xsf != 'y' ]] && [[ $create_xsf != 'n' ]]; do
+                read create_xsf
+                if [[ $create_xsf == 'y' ]]; then
+                    set -- "$@" "--xsf"
+                    continue
+                elif [[ $create_xsf == 'n' ]]; then   
+                    echo Create ${sys_label}.xsf from .VH file and launch the program again.
+                    exit
+                else
+                    echo Answer must be 'y' or 'n'. Try again.
+                fi
+            done
+        else
+            echo Error! ${sys_label}.xsf was not found in the directory. You must either have .xsf or .VH file in the directory to read electrostatic potential. 
+            exit
+        fi
+    fi
+fi
+    
+
+if contains "--xsf" $@; then
+    if [ -e ${sys_label}.XSF ] || [ -e ${sys_label}.xsf ]; then
+        echo An .xsf file was already found. Should it be used to extract electrostatic potential?
+        use_xsf=""
+        while [[ $use_xsf != 'y' ]] && [[ $use_xsf != 'n' ]]; do
+            read use_xsf
+            if [[ $use_xsf == 'y' ]]; then
+            continue
+            elif [[ $use_xsf == 'n' ]]; then   
+            echo Rename ${sys_label}.xsf and launch the program again.
+            exit
+            else
+                echo Answer must be 'y' or 'n'. Try again.
+            fi
+        done
+    else
+        echo Generating .xsf file from ${sys_label}.VH. Make sure you have ${sys_label}.XV in your current directory.
+        rho2xsf << EOF | tee
+        $sys_label
+        A
+        0 0 0
+        $(python "$PATH_params"/read_unit_cell.py ${sys_label})
+        VH
+        BYE
+EOF
+    fi
+fi
+if [ -e ${sys_label}.XSF ]; then
+    mv ${sys_label}.XSF ${sys_label}.xsf
+fi
+
+Plot_opt=''
+if contains "--cbar" $@; then
+    Plot_opt+="--cbar "
+fi
+if contains "--bonds" $@; then
+    Plot_opt+="--bonds "
+fi
+if contains "--fz" $@; then
+    Plot_opt+="--Fz "
+fi
+if contains "--atoms" $@; then 
+    Plot_opt+="--atoms ${sys_label}.xsf"
+    cp ${sys_label}.xyz input_plot.xyz
+fi
+
+if contains "--npy" $@; then
+    echo Generating Lennard-Jones force field...
+    echo '#########################################################################'
+    echo
+    ppafm-generate-ljff -i ${sys_label}.xsf -f npy
+    echo
+    echo Generating electrostatic force field from ${sys_label}.xsf...
+    echo '#########################################################################'
+    echo
+    ppafm-generate-elff -i ${sys_label}.xsf -f npy
+    echo
+    echo Relaxing probe particle on the force-field...
+    echo '#########################################################################'
+    echo
+    if contains "--pos" $@; then
+        ppafm-relaxed-scan -f npy --pos
+        echo
+        echo Generating AFM images..
+        echo '#########################################################################'
+        echo
+        ppafm-plot-results --df -f npy --pos $Plot_opt
+    else
+        ppafm-relaxed-scan -f npy
+        echo
+        echo Generating AFM images..
+        echo '#########################################################################'
+        echo
+        ppafm-plot-results --df -f npy $Plot_opt
+    fi
+else
+    echo Generating Lennard-Jones force field...
+    echo '#########################################################################'
+    echo
+    ppafm-generate-ljff -i ${sys_label}.xsf 
+    echo
+    echo Generating electrostatic force field from ${sys_label}.xsf...
+    echo '#########################################################################'
+    echo
+    ppafm-generate-elff -i ${sys_label}.xsf 
+    echo
+    echo Relaxing probe particle on the force-field...
+    echo '#########################################################################'
+    echo
+    if contains "--pos" $@; then
+        ppafm-relaxed-scan --pos
+        echo
+        echo Generating AFM images..
+        echo '#########################################################################'
+        echo
+        ppafm-plot-results --df --pos $Plot_opt
+    else
+        ppafm-relaxed-scan
+        echo
+        echo Generating AFM images..
+        echo '#########################################################################'
+        echo
+        ppafm-plot-results --df $Plot_opt
+    fi
+fi
+if contains "--atoms" $@; then
+    rm input_plot.xyz
+fi

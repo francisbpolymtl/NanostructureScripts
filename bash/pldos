@@ -1,0 +1,65 @@
+#!/bin/bash
+
+# This scripts uses python codes to plot PDOS and Band structure for magnetic and non-magnetic systems
+# Write the path to these codes in that variable:
+
+PATH_scripts="/home/vigir2/Stage E23/Utils"
+
+pl_pristine=0
+GEN=0
+
+while getopts "pgh" flag; do
+    case $flag in
+        p)
+        pl_pristine=1
+        ;;
+        g)
+		GEN=1
+        ;;
+        h)
+		echo Usage: pldos -OPTIONS
+		echo
+		echo OPTIONS: 
+		echo	-p :	Plot the total DOS of the pristine ribbon as a dashed line. The total DOS must be located in ../BN/*.DOS
+		echo 	-g :	Generates the PDOS and Band structures ASCII files using PDOS-Gen utility
+		echo
+		exit
+        ;;
+        \?)
+        echo Invalide option. Use -h option to see help menu.
+		exit
+        ;;
+    esac
+done
+
+echo Enter System label to plot density of state and band structure: 
+read sys_label
+
+if [ $GEN == 1 ]; then
+	PDOS-Gen $sys_label
+fi
+echo
+mag=$(python "$PATH_scripts"/Mag.py $sys_label)
+
+if [ $mag == 'FM' ]; then
+    echo FM magnetic state
+    python "$PATH_scripts"/pldos_double.py ${sys_label} $pl_pristine
+    python "$PATH_scripts"/plbands_double.py ${sys_label}
+    python "$PATH_scripts"/plbands_double.py ${sys_label}-F
+elif [ $mag == 'AFM' ]; then
+    echo AFM magnetic state
+    python "$PATH_scripts"/pldos.py ${sys_label} $pl_pristine
+    python "$PATH_scripts"/plbands.py ${sys_label}
+    python "$PATH_scripts"/plbands.py ${sys_label}-F
+else
+    echo DIA magnetic state
+    python "$PATH_scripts"/pldos.py ${sys_label} $pl_pristine
+    python "$PATH_scripts"/plbands.py ${sys_label}
+    python "$PATH_scripts"/plbands.py ${sys_label}-F
+fi
+
+rm PDOS-*
+rm ${sys_label}-BANDS.dat
+rm ${sys_label}-F-BANDS.dat
+
+echo End

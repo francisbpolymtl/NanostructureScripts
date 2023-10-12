@@ -1,0 +1,45 @@
+#!/bin/bash
+
+# This scripts uses the SIESTA utilities fmpdos and gnubands to create ASCII files containing PDOS for each species read from the SIESTA
+# .fdf input file and band structure around Fermi level
+# Enter below the path of the python code get_labels.py.
+PATH_script="/home/vigir2/Stage E23/Utils"
+
+if [ -z $1 ]; then
+	echo Enter System label to create PDOS and band structure output file: 
+	read sys_label
+else	
+	sys_label=$1
+fi
+
+if ! [ -e ${sys_label}.PDOS ]; then
+	echo ${sys_label}.PDOS was not found in the directory!
+	exit
+fi
+if ! [ -e ${sys_label}.fdf ]; then
+	echo ${sys_label}.fdf was not found in the directory!
+	exit
+fi
+if ! [ -e ${sys_label}.bands ]; then
+	echo ${sys_label}.bands was not found in the directory!
+	exit
+fi
+	
+
+labels=$(python "$PATH_script"/get_labels.py $sys_label)
+
+for x in $labels
+do 
+	label=$x
+	fmpdos << EOF
+	${sys_label}.PDOS
+	PDOS-${label}.dat
+	$label
+	0
+EOF
+done
+
+gnubands -F -e -5 -E 5 -o ${sys_label}-F-BANDS.dat ${sys_label}.bands
+gnubands -e -10 -E 2 -o ${sys_label}-BANDS.dat ${sys_label}.bands
+
+echo End

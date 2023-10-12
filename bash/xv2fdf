@@ -1,0 +1,36 @@
+#!/bin/bash
+
+#This script uses the python library sisl in order to convert the .XV output of a geometry relaxation to a new .fdf file, 
+# with the good lattice vectors, atom positions and grimme potential.
+
+if [ -n $1 ]
+then
+	if [[ $1 = -h ]] || [[ $1 = --help ]]
+	then
+		echo Creates a file with SIESTA .fdf formating from .XV. 
+		echo
+		echo Usage: xv2fdf [SystemLabel]
+		exit
+	fi
+fi
+
+if [ -z $1 ]
+then
+	echo You must put the system label in argument. Ex: xv2fdf [SystemLabel]
+	exit
+fi
+if ! [ -e ${1}.XV ]
+then 
+	echo ${1}.XV was not found in the directory. Try again.
+	exit
+fi
+
+sgeom ${1}.XV ${1}_temp.fdf
+echo SystemName   $1 > ${1}_new.fdf
+echo SystemLabel  $1 >> ${1}_new.fdf
+echo >> ${1}_new.fdf
+cat ${1}_temp.fdf >> ${1}_new.fdf
+echo >> ${1}_new.fdf
+fdf2grimme ${1}_temp.fdf >> ${1}_new.fdf
+rm ${1}_temp.fdf
+echo ${1}_new.fdf was written succesfully
