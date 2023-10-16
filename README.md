@@ -262,6 +262,7 @@ This option will plot the bonds between atoms in the image. However, I was not a
 
 This option will plot the total vertical force experienced by the probe particle. Below, you can see examples of images that were generated with simAFM. The contrast of the images comes from the frequency shift if the cantilever
 
+
 ## Python scripts
 
 ### bader2pdb
