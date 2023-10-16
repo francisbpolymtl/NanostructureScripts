@@ -21,6 +21,12 @@
     - [Bash Scripts](#bash-scripts)
         - [baderanalysis](#baderanalysis)
         - [scanSTM](#scanstm)
+        - [xv2fdf](#xv2fdf)
+        - [PDOS-Gen](#PDOS-Gen)
+        - [pldos](#pldos)
+        - [plot_muliken](#plot_muliken)
+        - [write_denchar](#write_denchar)
+        - [simAFM](#simafm)
     - [Python Scripts](#python-scripts)
         - [bader2pdb](#bader2pdb)
         - [bader2spind](#bader2spind)
@@ -135,8 +141,128 @@ Options:
 The script generates multiple files. The STM data are stored in files named SystemLabel-SZ-$HEIGHT.dat and images are in files named SystemLabel-SZ-$HEIGHT.png where $HEIGHT is the constant height in Ang at which the image has been generated. 
 
 IMPORTANT : You NEED to modify the path to the [plot_STM-lib](#plot_stm-lib) directly in the bash script
-## Python scripts
 
+### xv2fdf
+This script is a bash script called xv2fdf that uses the sisl python library to convert the SIESTA SystemLabel.XV geometry output file into a file called SystemLabel_new.fdf that contains the lattice vectors, atoms position and Grimme potential written in .fdf format. This script is really useful to extract the optimized geometry of a system that was obtained from a SIESTA relaxation calculation and to use it in a new calculation. To use it, you need the sisl library that can be downloaded using conda with this set of commands:
+```bash
+conda create -n sisl
+conda activate sisl
+conda config -- add channels conda-forge
+conda install -c conda-forge python=3.9 scipy matlplotlib plotly netcdf4 sisl
+```
+You also need the SIESTA utilities fdf2grimme. In your directory, make sure to have SystemLabel.XV. To use the
+script, in your directory, just type:
+```bash
+xv2fdf SystemLabel
+```
+This should create the file SystemLabel_new.fdf in the same directory.
+
+### PDOS-Gen
+This bash script uses the SIESTA utilities fmpdos and gnubands to extract the PDOS of each species into the ASCIIfile PDOS-SpecieLabel.dat and to extract the band structure into the ASCII file SystemLabel-BANDS.dat. You can then plot them with the method of your choicd. To use this script, you need the SIESTA utilities fmpdos and gnubands. You also need in your directory the files SystemLabel.PDOS, SystemLabel.bands and SystemLabel.fdf. The later is used to extract the SpeciesLabels and to loop over them with fmpdos. You also need the python script get_labels.py to do so. Write its path in the begenning of the PDOS-Gen script where specified. To use PDOS-Gen, just go in your directory and type the command:
+```bash
+PDOS-Gen
+```
+You can then follow the on-screen instructions.
+
+### pldos
+This bash script can be used to plot the band structures and the PDOS of systems. They work well for nanoribbons and could be adapted easily to systems in higher dimensions. To make these plots, pldos will use the following python scripts:
++ pldos.py (Plots a spin unpolarized PDOS)
++ plbands.py (Plot a spin unpolarized Band structure)
++ pldos_double.py (Plot a spin polarized PDOS)
++ plbands_double.py (Plot a spin polarized Band structure)
++ Mag.py (Reads the magnetic configuration (AFM, FM, DIA) from the system label)
++ read_Fermi.py (Reads the Fermi level from the SystemLabel.out file)
+
+You can, of course, use these codes individually and adapt them to your own use. You need to write the path to these scripts at the beginning of the pldos bash script. To use this script, you need the python library numpy and matplotlib. In the directory, you need the files SystemLabels.out and SystemLabel.DOS. You also need the files PDOS-SpeciesLabel.dat and SystemLabel-BANDS.dat that can be generated with PDOS-Gen (see 10.2). When using pldos, if you have the string "-FM-" in your SystemLabel, pldos will plot spin-polarized PDOS and Band structures. Else, it will plot a single PDOS and Band-structure. To use pldos, just type: 
+```bash
+pldos
+```
+in your directory and follow the on-screen instructions. You can also add the options -g and -p. -g will use the bash script PDOS-Gen to generate the PDOS and band structure ASCII files to be plotted. -p will plot the DOS of the pristine system in dashed line into the plot located in ../BN/*.DOS. 
+
+### plot_muliken
+This bash script reads the mulliken atomic population, uses it calculate the local spin density and plot it on the 2D structure. This script uses the following python codes and bash script to work:
+
++ calc_pop (Bash. Extract the mulliken population of the SystemLabel.out file and write it in the files arquivoup
+and arquivodown. This script is adapted from https://github.com/caiovincius/SIESTA-Shell-Tools.)
++ read_mulliken.py (Python. Reads the mulliken charges from arquivoup and arquivodown and compute the diference between mulliken charge associated to spin up and down. Write it as the fourth column of an .xyz file.)
++ plot_mulliken.py (Python. Plot the fourth column of an .xyz file onto the 2D structure with matplotlib)
+
+You can of course use any of these codes individually. Make sure to write the path to the python codes at the beginning of plot_mulliken. In your directory, you will need the files SystemLabel.out and SystemLabel.xyz. To use the script, use the following command:
+
+```bash
+plot_muliken SystemLabel
+```
+This will generate the file SystemLabel-Mag.png 
+
+Note: This script is very similar to the python script script presented below  : plot_Badercharge. The option -m in the python script will eventually merge the two scripts together.
+
+### write_denchar
+This bash script reads information found into SystemLabel.fdf and SystemLabel.XV to write an input file called denchar_input.fdf that can be given to the SIESTA utility denchar to plot charge density and wavefunctions of a system. The file generated respect the format that is given in the denchar documentation. To change the parameters of that input file and to know how to use denchar, please refer to that documentation. Note that the script works for orthogonal unit cells but could be adapted easily to non-orthogonal unit cells. The script uses the following python codes:
++ read_SpeciesLabel.py (read the SpeciesLabel block from the file SystemLabel.fdf)
++ read_unit_cell_denchar.py (Read the unit cell found in the file SystemLabel.XV)
+Don't forget to write the path to these script at the beginning of write_denchar. To use it, just write this command in the directory:
+```bash
+write_denchar SystemLabel
+```
+You can also add the option -n [number] to change the number of grid points along each lattice vector. The vectors will be scaled by that number to get the number of points. By default, n=5. To use denchar, you only have to write this command:
+```bash
+denchar < denchar_input.fdf
+```
+
+### simAFM
+This last script automates steps in order to plot FM-AFM simulated images using the ppafm code. I highly recommend taking a look at the documentation of that code. It can be found in the following git: https://github.com/ProbeParticle/ppafm. To use simAFM, you will need the following python code:
++ read_unit_cell.py (Read the unit cell from SystemLabel.XV)
+
+Make sure to write the path to this code at the beginning of simAFM. First of all, you should download the ppafm code. With anaconda, just enter the following commands:
+```bash
+conda create=n ppafm python =3.11
+conda activate ppafm
+conda install pyqt o cl=icd=system =c conda=forge
+pip install ppafm [opencl]
+```
+You should now be able to use the commands from ppafm. However, I added some modifications and fixes to the code. In order to simAFM to work, you will need to modify the python codes of ppafm. To do so, go to /home/your_username/anaconda3/envs/ppafm/lib/python3.11/site-packages. There should be a ppafm directory. Replace it with this directory: Vincent_Girouard_Stage_2023/Scripts/ppafm. Everything should now work fine. In the directory you want to use simAFM, you need the following files:
+* SystemLabel.XV
+* SystemLabel.xyz
+* SystemLabel.VH or SystemLabel.xsf that contains the grid read in SystemLabel.VH by the SIESTA utility rho2xsf.
+
+To use simAFM, just go in that directory and type the command:
+```bash
+simAFM [OPTIONS]
+```
+You can get further instructions and informations in the help menu by entering:
+```bash
+simAFM -h
+```
+If you don't have a params.ini file in your directory, simAFM will create one from a template I made and will ask you to edit it. params.ini contains all simulation parameters. Feel free to explore them. After editing the file, launch simAFM again and follow the on-screen instructions. Now let's take a look at the diferent command-line options that you can add.
+- -help or -h
+
+This option will open help menu
++ -xsf
+
+This option will automatically generate SystemLabel.xsf from the SystemLabel.VH electrostatic potential file output by SIESTA using the SIESTA utility rho2xsf. However, to make this work, you will have to modify the code of rho2xsf. To do so, go to the rho2xsf source directory (some_path/siesta-4.1.5/Util/Contrib/APostnikov) and edit rho2xsf.f. Just uncomment lines 99 to 115, save the file and compile the program again by writing make in the
+command line.
+
+* -pos
+
+This option plot on separated images the relaxed position of the probe particle.
++ -npy
+
+This option instructs ppafm to save intermediate data into machine-readable files, which speeds up the calculations.
+
++ -cbar
+
+This option will add a colorbar to the images.
++ -atoms
+
+This option will plot the atom position in the image.
++ bonds
+
+This option will plot the bonds between atoms in the image. However, I was not able to make it work well but this could be fixed easily.
++ fz
+
+This option will plot the total vertical force experienced by the probe particle. Below, you can see examples of images that were generated with simAFM. The contrast of the images comes from the frequency shift if the cantilever
+
+## Python scripts
 
 ### bader2pdb
 ---
