@@ -1,10 +1,9 @@
 #!/bin/bash
 
 show_help() {
-    echo "Usage: $0 [-s] [-n] [-l <label>] [-h]"
+    echo "Usage: $0 [-s] [-n] <label> [-h]"
     echo "  -s                 Process spin-polarized data"
     echo "  -n                 Process with non-orthogonal grid"
-    echo "  -l <label>         Set the label"
     echo "  -h                 Display this help message"
     exit 0
 }
@@ -13,28 +12,31 @@ spin_polarized=false
 non_orthogonal=false
 label=""
 
-while getopts "sln:h" opt; do
-    case $opt in
-        s)
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -s)
             spin_polarized=true
             ;;
-        l)
-            label="$OPTARG"
-            ;;
-        n)
+        -n)
             non_orthogonal=true
             ;;
-        h)
+        -h)
             show_help
             ;;
-        \?)
-            echo "Invalid option: -$OPTARG" >&2
-            exit 1
+        *)
+            label=$1
             ;;
     esac
+    shift
 done
 
+echo "Label set to: $label"
+echo "Orthogonality : $non_orthogonal"
+echo "Spin polarized : $spin_polarized" 
+
 shift $((OPTIND - 1))
+
+
 
 if $non_orthogonal; then
 	if $spin_polarized; then
@@ -56,7 +58,7 @@ if $non_orthogonal; then
         rm Up.cube
 
     	python3 /home/francis/siesta/4.1.5/scripts/bader2pdb.py -s $label
-        #python3 /home/francis/siesta/4.1.5/scripts/plot_Badercharge.py $label
+        python3 /home/francis/siesta/4.1.5/scripts/plot_Badercharge.py $label
 
 	else
     	g2c_ng -n 2 -s ${label}.STRUCT_OUT -g ${label}.RHO
@@ -72,7 +74,7 @@ if $non_orthogonal; then
         rm BADER.cube
 
 		python3 /home/francis/siesta/4.1.5/scripts/bader2pdb.py $label
-        #python3 /home/francis/siesta/4.1.5/scripts/plot_Badercharge.py $label
+        python3 /home/francis/siesta/4.1.5/scripts/plot_Badercharge.py $label
 
 	fi
 else
@@ -105,7 +107,7 @@ EOF
         mv BCF.dat ${label}-UP-BCF.dat
 
         python3 /home/francis/siesta/4.1.5/scripts/bader2pdb.py -s $label
-        #python3 /home/francis/siesta/4.1.5/scripts/plot_Badercharge.py $label
+        python3 /home/francis/siesta/4.1.5/scripts/plot_Badercharge.py $label
 
 
         rm ${label}.RHO.DN.cube
@@ -120,7 +122,7 @@ EOF
         mv BCF.dat ${label}-BCF.dat
 
         python3 /home/francis/siesta/4.1.5/scripts/bader2pdb.py $label
-        #python3 /home/francis/siesta/4.1.5/scripts/plot_Badercharge.py $label
+        python3 /home/francis/siesta/4.1.5/scripts/plot_Badercharge.py $label
 
         rm ${label}.RHO.cube
         rm ${label}.BADER.cube
